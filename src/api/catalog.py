@@ -19,12 +19,15 @@ def get_catalog():
     first_row = result.first()
     num_red_potions = first_row.num_red_potions
 
-    return [
-            {
-                "sku": "RED_POTION_0",
-                "name": "red potion",
-                "quantity": num_red_potions,
-                "price": 50,
-                "potion_type": [100, 0, 0, 0],
-            }
-        ]
+    if num_red_potions > 0:
+        return [
+                {
+                    "sku": "RED_POTION_0",
+                    "name": "red potion",
+                    "quantity": num_red_potions,
+                    "price": 50,
+                    "potion_type": [100, 0, 0, 0],
+                }
+            ]
+    else:
+        return []
