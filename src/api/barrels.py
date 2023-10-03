@@ -55,23 +55,20 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
 
     first_row = result.first()
 
+    barrel_price = 0
     for barrel in wholesale_catalog:
         match barrel.sku:
             case "SMALL_RED_BARREL":
                 barrel_price = barrel.price
             case _:
                 raise ValueError(f"Unknown sku of {barrel.sku}")
-        if first_row.num_red_potions < 10 and first_row.gold >= barrel_price:
-            return [
-                {
-                    "sku": "SMALL_RED_BARREL",
-                    "quantity": 1,
-                }
-            ]
-        else:
-            return [
-                {
-                    "sku": "SMALL_RED_BARREL",
-                    "quantity": 0,
-                }
-            ]
+
+    if first_row.num_red_potions < 10 and first_row.gold >= barrel_price:
+        return [
+            {
+                "sku": "SMALL_RED_BARREL",
+                "quantity": 1,
+            }
+        ]
+    else:
+        return []
