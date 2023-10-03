@@ -30,12 +30,8 @@ def post_deliver_barrels(barrels_delivered: list[Barrel]):
     gold = first_row.gold
 
     for barrel in barrels_delivered:
-        match barrel.sku:
-            case "SMALL_RED_BARREL":
-                num_red_ml += barrel.ml_per_barrel
-                gold -= barrel.price
-            case _:
-                raise ValueError(f"Unknown barrel sku of {barrel.sku}")
+        num_red_ml += barrel.ml_per_barrel
+        gold -= barrel.price
         
     with db.engine.begin() as connection:
         result = connection.execute(sqlalchemy.text(f"UPDATE global_inventory SET num_red_ml = {num_red_ml}, gold = {gold} WHERE id = 1"))
@@ -57,11 +53,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
 
     barrel_price = 0
     for barrel in wholesale_catalog:
-        match barrel.sku:
-            case "SMALL_RED_BARREL":
-                barrel_price = barrel.price
-            case _:
-                raise ValueError(f"Unknown sku of {barrel.sku}")
+        barrel_price = barrel.price
 
     if first_row.num_red_potions < 10 and first_row.gold >= barrel_price:
         return [

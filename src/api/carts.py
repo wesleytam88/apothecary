@@ -69,15 +69,11 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
     cart = carts[cart_id]
     print(cart.shopping_cart)
     for item, quantity in (cart.shopping_cart).items():
-        match item:
-            case "RED_POTION_0":
-                if quantity > num_red_potions:
-                    # If buying more potions than in stock, buy available stock
-                    quantity = num_red_potions
-                    cart.shopping_cart[item] = num_red_potions
-                gold += 50 * quantity
-            case _:
-                raise ValueError(f"Unknown item of {item}")
+        if quantity > num_red_potions:
+            # If buying more potions than in stock, buy available stock
+            quantity = num_red_potions
+            cart.shopping_cart[item] = num_red_potions
+        gold += 50 * quantity
     
     with db.engine.begin() as connection:
         result = connection.execute(sqlalchemy.text(f"UPDATE global_inventory SET num_red_potions = {num_red_potions - quantity}, gold = {gold} WHERE id = 1"))

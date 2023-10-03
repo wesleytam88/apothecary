@@ -30,10 +30,8 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory]):
     print(potions_delivered)
 
     for potion in potions_delivered:
-        match potion.potion_type:
-            case [100, 0, 0, 0]:
-                num_red_ml -= potion.potion_type[0] * potion.quantity
-                num_red_potions += potion.quantity
+        num_red_ml -= potion.potion_type[0] * potion.quantity
+        num_red_potions += potion.quantity
 
     with db.engine.begin() as connection:
         result = connection.execute(sqlalchemy.text(f"UPDATE global_inventory SET num_red_ml = {num_red_ml}, num_red_potions = {num_red_potions} WHERE id = 1"))
