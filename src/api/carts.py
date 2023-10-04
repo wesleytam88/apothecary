@@ -16,7 +16,6 @@ router = APIRouter(
 
 class NewCart(BaseModel):
     customer: str
-    shopping_cart: dict
 
 
 @router.post("/")
@@ -24,8 +23,7 @@ def create_cart(new_cart: NewCart):
     """ """
     global cart_ids, carts
 
-    new_cart.shopping_cart = {}
-    carts[cart_ids] = new_cart
+    carts[cart_ids] = [new_cart.customer, {}]
     cart_ids += 1
     return {"cart_id": cart_ids - 1}
 
@@ -45,10 +43,12 @@ class CartItem(BaseModel):
 def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
     """ """
     cart = carts[cart_id]
-    if item_sku not in cart.shopping_cart:
-        cart.shopping_cart[item_sku] = cart_item.quantity
+    cart_basket = cart[1]
+    # Add item to cart
+    if item_sku not in cart[1]:
+        cart_basket[item_sku] = cart_item.quantity
     else:
-        cart.shopping_cart[item_sku] += cart_item.quantity
+        cart_basket[item_sku] += cart_item.quantity
 
     return "OK"
 
@@ -67,12 +67,13 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
     gold = first_row.gold
 
     cart = carts[cart_id]
-    print(cart.shopping_cart)
-    for item, quantity in (cart.shopping_cart).items():
+    cart_customer = cart[0]
+    cart_basket = cart[1]
+    for item, quantity in (cart[1]).items():
         if quantity > num_red_potions:
             # If buying more potions than in stock, buy available stock
             quantity = num_red_potions
-            cart.shopping_cart[item] = num_red_potions
+            cart_basket[item] = num_red_potions
         gold += 50 * quantity
     
     with db.engine.begin() as connection:
