@@ -15,17 +15,10 @@ def get_catalog():
 
     with db.engine.begin() as connection:
         table = connection.execute(sqlalchemy.text("SELECT * FROM potion_inventory")).all()
-        red_pot_row = connection.execute(sqlalchemy.text("SELECT * FROM potion_inventory where id = 1")).first()
-        green_pot_row = connection.execute(sqlalchemy.text("SELECT * FROM potion_inventory where id = 2")).first()
-        blue_pot_row = connection.execute(sqlalchemy.text("SELECT * FROM potion_inventory where id = 3")).first()
 
-    quantity_list = [red_pot_row.quantity,
-                     green_pot_row.quantity,
-                     blue_pot_row.quantity]
-
-    if sum(quantity_list) > 0:
-        catalog_list = []
-        for potion in table:
+    catalog_list = []
+    for potion in table:
+        if potion.quantity > 0:
             catalog_list.append(
                 {
                     "sku": potion.sku,
@@ -35,6 +28,5 @@ def get_catalog():
                     "potion_type": potion.potion_type
                 }
             )
-        return catalog_list
-    else:
-        return []
+
+    return catalog_list
