@@ -21,20 +21,38 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory]):
     print(potions_delivered)
 
     with db.engine.begin() as connection:
-        result = connection.execute(sqlalchemy.text("SELECT * FROM global_inventory"))
+        red_pot_row = connection.execute(sqlalchemy.text("SELECT * FROM potion_inventory where id = 1")).first()
+        green_pot_row = connection.execute(sqlalchemy.text("SELECT * FROM potion_inventory where id = 2")).first()
+        blue_pot_row = connection.execute(sqlalchemy.text("SELECT * FROM potion_inventory where id = 3")).first()
 
-    first_row = result.first()
-    num_red_ml = first_row.num_red_ml
-    num_red_potions = first_row.num_red_potions
+    num_red_potions = red_pot_row.quantity
+    red_ml = red_pot_row.ml
+    num_green_potions = green_pot_row.quantity
+    green_ml = green_pot_row.ml
+    num_blue_potions = blue_pot_row.quantity
+    blue_ml = blue_pot_row.ml
 
     print(potions_delivered)
 
     for potion in potions_delivered:
-        num_red_ml -= potion.potion_type[0] * potion.quantity
-        num_red_potions += potion.quantity
+        red_ml -= potion.potion_type[0] * potion.quantity
+        green_ml -= potion.potion_type[1] * potion.quantity
+        blue_ml -= potion.potion_type[2] * potion.quantity
+
+        match potion.potion_type:
+            case [100, 0, 0, 0]:
+                num_red_potions += potion.quantity
+            case [0, 100, 0, 0]:
+                num_green_potions += potion.quantity
+            case [0, 0, 100, 0]:
+                num_blue_potions += potion.quantity
+            case _:
+                raise ValueError(f"unknown potion type {potion.potion_type}")
 
     with db.engine.begin() as connection:
-        result = connection.execute(sqlalchemy.text(f"UPDATE global_inventory SET num_red_ml = {num_red_ml}, num_red_potions = {num_red_potions} WHERE id = 1"))
+        connection.execute(sqlalchemy.text(f"UPDATE potion_inventory SET quantity = {num_red_potions}, ml = {red_ml} WHERE id = 1"))
+        connection.execute(sqlalchemy.text(f"UPDATE potion_inventory SET quantity = {num_green_potions}, ml = {green_ml} WHERE id = 2"))
+        connection.execute(sqlalchemy.text(f"UPDATE potion_inventory SET quantity = {num_blue_potions}, ml = {blue_ml} WHERE id = 3"))
 
     return "OK"
 
@@ -49,18 +67,26 @@ def get_bottle_plan():
     # green potion to add.
     # Expressed in integers from 1 to 100 that must sum up to 100.
 
-    # Initial logic: bottle all barrels into red potions.
-
     with db.engine.begin() as connection:
-        result = connection.execute(sqlalchemy.text("SELECT * FROM global_inventory"))
+        red_pot_row = connection.execute(sqlalchemy.text("SELECT * FROM potion_inventory where id = 1")).first()
+        green_pot_row = connection.execute(sqlalchemy.text("SELECT * FROM potion_inventory where id = 2")).first()
+        blue_pot_row = connection.execute(sqlalchemy.text("SELECT * FROM potion_inventory where id = 3")).first()
 
-    first_row = result.first()
-    num_red_ml = first_row.num_red_ml
-    num_red_potions_to_brew = num_red_ml // 100     # hard-coded to brew red potions
+    num_red_potions_to_brew = red_pot_row.ml // 100
+    num_green_potions_to_brew = green_pot_row.ml // 100
+    num_blue_potions_to_brew = blue_pot_row.ml // 100
 
     return [
-            {
-                "potion_type": [100, 0, 0, 0],
-                "quantity": num_red_potions_to_brew,
-            }
-        ]
+        {
+            "potion_type": [100, 0, 0, 0],
+            "quantity": num_red_potions_to_brew,
+        },
+        {
+            "potion_type": [0, 100, 0, 0],
+            "quantity": num_green_potions_to_brew,
+        },
+        {
+            "potion_type": [0, 0, 100, 0],
+            "quantity": num_blue_potions_to_brew,
+        }
+    ]

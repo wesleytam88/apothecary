@@ -60,23 +60,42 @@ class CartCheckout(BaseModel):
 def checkout(cart_id: int, cart_checkout: CartCheckout):
     """ """
     with db.engine.begin() as connection:
-        result = connection.execute(sqlalchemy.text("SELECT * FROM global_inventory"))
-
-    first_row = result.first()
-    num_red_potions = first_row.num_red_potions
-    gold = first_row.gold
+        gold = connection.execute(sqlalchemy.text("SELECT * FROM global_inventory where id = 1")).first().gold
+        red_pot_row = connection.execute(sqlalchemy.text("SELECT * FROM potion_inventory where id = 1")).first()
+        green_pot_row = connection.execute(sqlalchemy.text("SELECT * FROM potion_inventory where id = 2")).first()
+        blue_pot_row = connection.execute(sqlalchemy.text("SELECT * FROM potion_inventory where id = 3")).first()
 
     cart = carts[cart_id]
     cart_customer = cart[0]
     cart_basket = cart[1]
-    for item, quantity in (cart[1]).items():
-        if quantity > num_red_potions:
-            # If buying more potions than in stock, buy available stock
-            quantity = num_red_potions
-            cart_basket[item] = num_red_potions
-        gold += 50 * quantity
     
-    with db.engine.begin() as connection:
-        result = connection.execute(sqlalchemy.text(f"UPDATE global_inventory SET num_red_potions = {num_red_potions - quantity}, gold = {gold} WHERE id = 1"))
+    red_quantity = 0
+    green_quantity = 0
+    blue_quantity = 0
 
-    return {"total_potions_bought": quantity, "total_gold_paid": gold}
+    for sku, quantity in (cart_basket).items():
+        match sku:
+            case "RED_POTION":
+                red_quantity, gold = checkout_logic(quantity, red_quantity, gold, red_pot_row)
+            case "GREEN_POTION":
+                green_quantity, gold = checkout_logic(quantity, green_quantity, gold, green_pot_row)
+            case "BLUE_POTION":
+                blue_quantity, gold = checkout_logic(quantity, blue_quantity, gold, blue_pot_row)
+            case _:
+                raise ValueError(f"unknown sku of {sku}")
+
+    with db.engine.begin() as connection:
+        connection.execute(sqlalchemy.text(f"UPDATE potion_inventory SET quantity = {red_pot_row.quantity - red_quantity} WHERE id = 1"))
+        connection.execute(sqlalchemy.text(f"UPDATE potion_inventory SET quantity = {green_pot_row.quantity - green_quantity} WHERE id = 2"))
+        connection.execute(sqlalchemy.text(f"UPDATE potion_inventory SET quantity = {blue_pot_row.quantity - blue_quantity} WHERE id = 3"))
+        connection.execute(sqlalchemy.text(f"UPDATE global_inventory SET gold = {gold} WHERE id = 1"))
+
+    return {"total_potions_bought": sum([red_quantity, green_quantity, blue_quantity]), "total_gold_paid": gold}
+
+
+def checkout_logic(customer_quantity: int, checkout_quantity: int, gold: int, potion_row):
+    """ """
+    if customer_quantity > potion_row.quantity:
+        checkout_quantity = potion_row.quantity
+    gold += potion_row.price * checkout_quantity
+    return checkout_quantity, gold
