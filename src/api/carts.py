@@ -97,5 +97,7 @@ def checkout_logic(customer_quantity: int, checkout_quantity: int, gold: int, po
     """ """
     if customer_quantity > potion_row.quantity:
         checkout_quantity = potion_row.quantity
+    else:
+        checkout_quantity = customer_quantity
     gold += potion_row.price * checkout_quantity
     return checkout_quantity, gold
