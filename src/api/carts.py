@@ -60,7 +60,7 @@ class CartCheckout(BaseModel):
 def checkout(cart_id: int, cart_checkout: CartCheckout):
     """ """
     with db.engine.begin() as connection:
-        gold = connection.execute(sqlalchemy.text("SELECT * FROM global_inventory where id = 1")).first().gold
+        starting_gold = connection.execute(sqlalchemy.text("SELECT * FROM global_inventory where id = 1")).first().gold
         red_pot_row = connection.execute(sqlalchemy.text("SELECT * FROM potion_inventory where id = 1")).first()
         green_pot_row = connection.execute(sqlalchemy.text("SELECT * FROM potion_inventory where id = 2")).first()
         blue_pot_row = connection.execute(sqlalchemy.text("SELECT * FROM potion_inventory where id = 3")).first()
@@ -69,6 +69,7 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
     cart_customer = cart[0]
     cart_basket = cart[1]
     
+    gold = 0
     red_quantity = 0
     green_quantity = 0
     blue_quantity = 0
@@ -83,18 +84,20 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
                 blue_quantity, gold = checkout_logic(quantity, blue_quantity, gold, blue_pot_row)
             case _:
                 raise ValueError(f"unknown sku of {sku}")
+            
+    print("Cart basket:", cart_basket)
 
     with db.engine.begin() as connection:
         connection.execute(sqlalchemy.text(f"UPDATE potion_inventory SET quantity = {red_pot_row.quantity - red_quantity} WHERE id = 1"))
         connection.execute(sqlalchemy.text(f"UPDATE potion_inventory SET quantity = {green_pot_row.quantity - green_quantity} WHERE id = 2"))
         connection.execute(sqlalchemy.text(f"UPDATE potion_inventory SET quantity = {blue_pot_row.quantity - blue_quantity} WHERE id = 3"))
-        connection.execute(sqlalchemy.text(f"UPDATE global_inventory SET gold = {gold} WHERE id = 1"))
+        connection.execute(sqlalchemy.text(f"UPDATE global_inventory SET gold = {starting_gold + gold} WHERE id = 1"))
 
     return {"total_potions_bought": sum([red_quantity, green_quantity, blue_quantity]), "total_gold_paid": gold}
 
 
 def checkout_logic(customer_quantity: int, checkout_quantity: int, gold: int, potion_row):
-    """ """
+    """Handles if customer orders more potions than in stock"""
     if customer_quantity > potion_row.quantity:
         checkout_quantity = potion_row.quantity
     else:
