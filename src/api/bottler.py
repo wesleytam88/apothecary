@@ -18,7 +18,7 @@ class PotionInventory(BaseModel):
 @router.post("/deliver")
 def post_deliver_bottles(potions_delivered: list[PotionInventory]):
     """ """
-    print(potions_delivered)
+    print("Potions delivered:", potions_delivered)
 
     with db.engine.begin() as connection:
         red_pot_row = connection.execute(sqlalchemy.text("SELECT * FROM potion_inventory where id = 1")).first()
@@ -31,8 +31,6 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory]):
     green_ml = green_pot_row.ml
     num_blue_potions = blue_pot_row.quantity
     blue_ml = blue_pot_row.ml
-
-    print(potions_delivered)
 
     for potion in potions_delivered:
         red_ml -= potion.potion_type[0] * potion.quantity
