@@ -74,19 +74,28 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
 
     if red_pot_row.quantity < 10 and gold >= small_red_barrel.price:
         order_list.append({
-            "sku": "SMALL_RED_BARREL",
+            "sku": small_red_barrel.sku,
+            "ml_per_barrel": small_red_barrel.ml_per_barrel,
+            "potion_type": small_red_barrel.potion_type,
+            "price": small_red_barrel.price,
             "quantity": 1
         })
         gold -= small_red_barrel.price
     if green_pot_row.quantity < 10 and gold >= small_green_barrel.price:
         order_list.append({
-            "sku": "SMALL_GREEN_BARREL",
+            "sku": small_green_barrel.sku,
+            "ml_per_barrel": small_green_barrel.ml_per_barrel,
+            "potion_type": small_green_barrel.potion_type,
+            "price": small_green_barrel.price,
             "quantity": 1
         })
         gold -= small_green_barrel.price
     if blue_pot_row.quantity < 10 and gold >= small_blue_barrel.price:
         order_list.append({
-            "sku": "SMALL_BLUE_BARREL",
+            "sku": small_blue_barrel.sku,
+            "ml_per_barrel": small_blue_barrel.ml_per_barrel,
+            "potion_type": small_blue_barrel.potion_type,
+            "price": small_blue_barrel.price,
             "quantity": 1
         })
         gold -= small_blue_barrel.price
