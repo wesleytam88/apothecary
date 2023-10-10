@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, HTTPException
 from pydantic import BaseModel
 from src.api import auth
 import sqlalchemy
@@ -99,7 +99,7 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
 def checkout_logic(customer_quantity: int, checkout_quantity: int, gold: int, potion_row):
     """Handles if customer orders more potions than in stock"""
     if customer_quantity > potion_row.quantity:
-        checkout_quantity = potion_row.quantity
+        raise HTTPException(status_code=500, detail=f"Trying to buy {customer_quantity} potions when {potion_row.quantity} is available")
     else:
         checkout_quantity = customer_quantity
     gold += potion_row.price * checkout_quantity
