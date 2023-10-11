@@ -20,8 +20,8 @@ def get_inventory():
         green_pot_row = connection.execute(sqlalchemy.text("SELECT * FROM potion_inventory where id = 2")).first()
         blue_pot_row = connection.execute(sqlalchemy.text("SELECT * FROM potion_inventory where id = 3")).first()
 
-    return {"number_of_potions": sum(red_pot_row.quantity, green_pot_row.quantity, blue_pot_row.quantity), 
-            "ml_in_barrels": sum(global_inv.num_red_ml, global_inv.num_green_ml, global_inv.num_blue_ml), 
+    return {"number_of_potions": sum([red_pot_row.quantity, green_pot_row.quantity, blue_pot_row.quantity]), 
+            "ml_in_barrels": sum([global_inv.num_red_ml, global_inv.num_green_ml, global_inv.num_blue_ml]), 
             "gold": global_inv.gold}
 
 class Result(BaseModel):
