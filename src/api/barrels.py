@@ -33,15 +33,15 @@ def post_deliver_barrels(barrels_delivered: list[Barrel]):
     blue_ml = blue_pot_row.ml
 
     for barrel in barrels_delivered:
-        match barrel.sku:
-            case "SMALL_RED_BARREL":
-                red_ml = update_ml(barrel, red_ml)
-            case "SMALL_GREEN_BARREL":
-                green_ml = update_ml(barrel, green_ml)
-            case "SMALL_BLUE_BARREL":
-                blue_ml = update_ml(barrel, blue_ml)
+        match barrel.potion_type:
+            case [1, 0, 0, 0]:
+                red_ml += barrel.quantity * barrel.ml_per_barrel
+            case [0, 1, 0, 0]:
+                green_ml += barrel.quantity * barrel.ml_per_barrel
+            case [0, 0, 1, 0]:
+                blue_ml += barrel.quantity * barrel.ml_per_barrel
             case _:
-                raise ValueError(f"sku of {barrel.sku} not found")
+                raise ValueError(f"potion type of {barrel.potion_type} not found")
         gold -= barrel.price * barrel.quantity
         
     with db.engine.begin() as connection:
@@ -72,7 +72,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     small_green_barrel = get_barrel(wholesale_catalog, "SMALL_GREEN_BARREL")
     small_blue_barrel = get_barrel(wholesale_catalog, "SMALL_BLUE_BARREL")
 
-    if red_pot_row.quantity < 10 and gold >= small_red_barrel.price:
+    if red_pot_row.quantity < 10 and gold >= small_red_barrel.price and small_red_barrel.quantity > 0:
         order_list.append({
             "sku": small_red_barrel.sku,
             "ml_per_barrel": small_red_barrel.ml_per_barrel,
@@ -81,7 +81,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
             "quantity": 1
         })
         gold -= small_red_barrel.price
-    if green_pot_row.quantity < 10 and gold >= small_green_barrel.price:
+    if green_pot_row.quantity < 10 and gold >= small_green_barrel.price and small_green_barrel.quantity > 0:
         order_list.append({
             "sku": small_green_barrel.sku,
             "ml_per_barrel": small_green_barrel.ml_per_barrel,
@@ -90,7 +90,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
             "quantity": 1
         })
         gold -= small_green_barrel.price
-    if blue_pot_row.quantity < 10 and gold >= small_blue_barrel.price:
+    if blue_pot_row.quantity < 10 and gold >= small_blue_barrel.price and small_blue_barrel.quantity > 0:
         order_list.append({
             "sku": small_blue_barrel.sku,
             "ml_per_barrel": small_blue_barrel.ml_per_barrel,
@@ -108,9 +108,3 @@ def get_barrel(wholesale_catalog: list[Barrel], sku: str) -> Barrel:
         if barrel.sku == sku:
             return barrel
     raise NameError(f"{sku} not found in catalog")
-
-def update_ml(barrel: Barrel, ml: int) -> int:
-    """ """
-    for i in range(barrel.quantity):
-        ml += barrel.ml_per_barrel
-    return ml
