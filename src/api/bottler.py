@@ -74,17 +74,18 @@ def get_bottle_plan():
     num_green_potions_to_brew = green_pot_row.ml // 100
     num_blue_potions_to_brew = blue_pot_row.ml // 100
 
-    return [
-        {
-            "potion_type": [100, 0, 0, 0],
-            "quantity": num_red_potions_to_brew,
-        },
-        {
-            "potion_type": [0, 100, 0, 0],
-            "quantity": num_green_potions_to_brew,
-        },
-        {
-            "potion_type": [0, 0, 100, 0],
-            "quantity": num_blue_potions_to_brew,
-        }
-    ]
+    bottler_list = []
+    if num_red_potions_to_brew > 0:
+        bottler_list.append({"potion_type": [100, 0, 0, 0],
+                             "quantity": num_red_potions_to_brew}
+        )
+    if num_green_potions_to_brew > 0:
+        bottler_list.append({"potion_type": [0, 100, 0, 0],
+                             "quantity": num_green_potions_to_brew}
+        )
+    if num_blue_potions_to_brew > 0:
+        bottler_list.append({"potion_type": [0, 0, 100, 0],
+                             "quantity": num_blue_potions_to_brew}
+        )
+
+    return bottler_list
