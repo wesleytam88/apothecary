@@ -23,14 +23,13 @@ class Barrel(BaseModel):
 def post_deliver_barrels(barrels_delivered: list[Barrel]):
     """ """
     with db.engine.begin() as connection:
-        gold = connection.execute(sqlalchemy.text("SELECT * FROM global_inventory")).first().gold
-        red_pot_row = connection.execute(sqlalchemy.text("SELECT * FROM potion_inventory where id = 1")).first()
-        green_pot_row = connection.execute(sqlalchemy.text("SELECT * FROM potion_inventory where id = 2")).first()
-        blue_pot_row = connection.execute(sqlalchemy.text("SELECT * FROM potion_inventory where id = 3")).first()
+        global_inv = connection.execute(sqlalchemy.text("SELECT * FROM global_inventory")).first()
 
-    red_ml = red_pot_row.ml
-    green_ml = green_pot_row.ml
-    blue_ml = blue_pot_row.ml
+    red_ml = global_inv.red_ml
+    green_ml = global_inv.green_ml
+    blue_ml = global_inv.blue_ml
+    dark_ml = global_inv.dark_ml
+    gold = global_inv.gold
 
     for barrel in barrels_delivered:
         match barrel.potion_type:
@@ -40,15 +39,21 @@ def post_deliver_barrels(barrels_delivered: list[Barrel]):
                 green_ml += barrel.quantity * barrel.ml_per_barrel
             case [0, 0, 1, 0]:
                 blue_ml += barrel.quantity * barrel.ml_per_barrel
+            case [0, 0, 0, 1]:
+                dark_ml += barrel.quantity * barrel.ml_per_barrel
             case _:
                 raise ValueError(f"potion type of {barrel.potion_type} not found")
         gold -= barrel.price * barrel.quantity
         
     with db.engine.begin() as connection:
-        connection.execute(sqlalchemy.text(f"UPDATE potion_inventory SET ml = {red_ml} WHERE id = 1"))
-        connection.execute(sqlalchemy.text(f"UPDATE potion_inventory SET ml = {green_ml} WHERE id = 2"))
-        connection.execute(sqlalchemy.text(f"UPDATE potion_inventory SET ml = {blue_ml} WHERE id = 3"))
-        connection.execute(sqlalchemy.text(f"UPDATE global_inventory SET gold = {gold} WHERE id = 1"))
+        connection.execute(sqlalchemy.text(f"UPDATE global_inventory \
+                                             SET \
+                                                gold = {gold}, \
+                                                red_ml = {red_ml}, \
+                                                green_ml = {green_ml}, \
+                                                blue_ml = {blue_ml}, \
+                                                dark_ml = {dark_ml} \
+                                             WHERE id = 1"))
     
     print(barrels_delivered)
 
