@@ -36,9 +36,11 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory]):
             blue_ml -= potion.potion_type[2] * potion.quantity
             dark_ml -= potion.potion_type[3] * potion.quantity
 
-            connection.execute(sqlalchemy.text(f"UPDATE potion_inventory \
-                                                 SET quantity = quantity + 1 \
-                                                 WHERE potion_type = {potion.potion_type}"))
+            connection.execute(sqlalchemy.text(f"""UPDATE potion_inventory \
+                                                   SET quantity = quantity + :quantity \
+                                                   WHERE potion_type = :type"""),
+                                               [{"quantity": potion.quantity, 
+                                                 "type": potion.potion_type}])
 
         connection.execute(sqlalchemy.text(f"UPDATE global_inventory SET \
                                              red_ml = {red_ml}, \
@@ -61,8 +63,11 @@ def get_bottle_plan():
     # Expressed in integers from 1 to 100 that must sum up to 100.
 
     with db.engine.begin() as connection:
-        global_inv = connection.execute(sqlalchemy.text("SELECT * FROM global_inventory where id = 1")).first()
-        potion_inv = connection.execute(sqlalchemy.text("SELECT * FROM potion_inventory")).all()
+        global_inv = connection.execute(sqlalchemy.text("SELECT * \
+                                                        FROM global_inventory \
+                                                        WHERE id = 1")).first()
+        potion_inv = connection.execute(sqlalchemy.text("SELECT *  \
+                                                        FROM potion_inventory")).all()
 
     red_ml = global_inv.red_ml
     green_ml = global_inv.green_ml
@@ -74,7 +79,6 @@ def get_bottle_plan():
     potions_to_brew = {}
     while keep_bottling:
         for potion in potion_inv:
-            print(potion.sku)
             # Check if potion cannot be brewed with available ml
             if potion.potion_type[0] > red_ml or \
                potion.potion_type[1] > green_ml or \
