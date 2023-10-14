@@ -4,9 +4,6 @@ from src.api import auth
 import sqlalchemy
 from src import database as db
 
-carts = {}
-cart_ids = 1
-
 router = APIRouter(
     prefix="/carts",
     tags=["cart"],
@@ -21,18 +18,48 @@ class NewCart(BaseModel):
 @router.post("/")
 def create_cart(new_cart: NewCart):
     """ """
-    global cart_ids, carts
-
-    carts[cart_ids] = [new_cart.customer, {}]
-    cart_ids += 1
-    return {"cart_id": cart_ids - 1}
+    with db.engine.begin() as connection:
+        id = connection.execute(sqlalchemy.text("""
+                                                INSERT INTO carts (customer)
+                                                VALUES (:customer)
+                                                RETURNING id
+                                                """),
+                                                [{"customer": new_cart.customer}])
+    return {"cart_id": id.first()[0]}
 
 
 @router.get("/{cart_id}")
 def get_cart(cart_id: int):
     """ """
+    with db.engine.begin() as connection:
+        cart_row = connection.execute(sqlalchemy.text("""
+                                                      SELECT *
+                                                      FROM carts
+                                                      WHERE id = :cart_id
+                                                      """),
+                                                      [{"cart_id": cart_id}])
+        cart = cart_row.first()
 
-    return carts[cart_id]
+        items = connection.execute(sqlalchemy.text("""
+                                                   SELECT *
+                                                   FROM cart_items
+                                                   WHERE cart_id = :cart_id
+                                                   """),
+                                                   [{"cart_id": cart_id}])
+        items_table = items.all()
+
+        items = {}
+        for row in items_table:
+            potion = connection.execute(sqlalchemy.text("""
+                                                        SELECT *
+                                                        FROM potion_inventory
+                                                        WHERE id = :potion_id
+                                                        """),
+                                                        [{"potion_id": row.potion_id}])
+            potion = potion.first()
+            items[potion.sku] = row.quantity
+
+        return [cart.customer, items]
 
 
 class CartItem(BaseModel):
@@ -42,13 +69,23 @@ class CartItem(BaseModel):
 @router.post("/{cart_id}/items/{item_sku}")
 def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
     """ """
-    cart = carts[cart_id]
-    cart_basket = cart[1]
-    # Add item to cart
-    if item_sku not in cart[1]:
-        cart_basket[item_sku] = cart_item.quantity
-    else:
-        cart_basket[item_sku] += cart_item.quantity
+    with db.engine.begin() as connection:
+        potion = connection.execute(sqlalchemy.text("""
+                                                    SELECT *
+                                                    FROM potion_inventory
+                                                    WHERE sku = :p_sku
+                                                    """),
+                                                    [{"p_sku": item_sku}])
+        potion = potion.first()
+
+        # Update cart_items table
+        connection.execute(sqlalchemy.text("""
+                                           INSERT INTO cart_items (cart_id, potion_id, quantity)
+                                           VALUES (:cart_id, :potion_id, :quantity)
+                                           """),
+                                           [{"cart_id": cart_id,
+                                             "potion_id": potion.id,
+                                             "quantity": cart_item.quantity}])
 
     return "OK"
 
@@ -60,47 +97,36 @@ class CartCheckout(BaseModel):
 def checkout(cart_id: int, cart_checkout: CartCheckout):
     """ """
     with db.engine.begin() as connection:
-        starting_gold = connection.execute(sqlalchemy.text("SELECT * FROM global_inventory where id = 1")).first().gold
-        red_pot_row = connection.execute(sqlalchemy.text("SELECT * FROM potion_inventory where id = 1")).first()
-        green_pot_row = connection.execute(sqlalchemy.text("SELECT * FROM potion_inventory where id = 2")).first()
-        blue_pot_row = connection.execute(sqlalchemy.text("SELECT * FROM potion_inventory where id = 3")).first()
+        cart_items = connection.execute(sqlalchemy.text("""
+                                                        SELECT *
+                                                        FROM cart_items
+                                                        WHERE cart_id = :c_id
+                                                        """),
+                                                        [{"c_id": cart_id}])
+        cart_items = cart_items.all()
 
-    cart = carts[cart_id]
-    cart_customer = cart[0]
-    cart_basket = cart[1]
-    
-    gold = 0
-    red_quantity = 0
-    green_quantity = 0
-    blue_quantity = 0
+        # Update quantities in potion table
+        checkout_gold = 0
+        sum_quantity = 0
+        for item in cart_items:
+            price = connection.execute(sqlalchemy.text("""
+                                                      UPDATE potion_inventory
+                                                      SET quantity = quantity - :c_quantity
+                                                      WHERE id = :p_id
+                                                      RETURNING price
+                                                      """),
+                                                      [{"c_quantity": item.quantity,
+                                                        "p_id": item.potion_id}])
+            checkout_gold += price.first()[0]
+            sum_quantity += item.quantity
 
-    for sku, quantity in (cart_basket).items():
-        match sku:
-            case "RED_POTION":
-                red_quantity, gold = checkout_logic(quantity, red_quantity, gold, red_pot_row)
-            case "GREEN_POTION":
-                green_quantity, gold = checkout_logic(quantity, green_quantity, gold, green_pot_row)
-            case "BLUE_POTION":
-                blue_quantity, gold = checkout_logic(quantity, blue_quantity, gold, blue_pot_row)
-            case _:
-                raise ValueError(f"unknown sku of {sku}")
-            
-    print("Cart basket:", cart_basket)
+        # Update gold
+        connection.execute(sqlalchemy.text("""
+                                           UPDATE global_inventory
+                                           SET gold = gold + :checkout_gold
+                                           WHERE id = 1
+                                           """),
+                                           [{"checkout_gold": checkout_gold}])
 
-    with db.engine.begin() as connection:
-        connection.execute(sqlalchemy.text(f"UPDATE potion_inventory SET quantity = {red_pot_row.quantity - red_quantity} WHERE id = 1"))
-        connection.execute(sqlalchemy.text(f"UPDATE potion_inventory SET quantity = {green_pot_row.quantity - green_quantity} WHERE id = 2"))
-        connection.execute(sqlalchemy.text(f"UPDATE potion_inventory SET quantity = {blue_pot_row.quantity - blue_quantity} WHERE id = 3"))
-        connection.execute(sqlalchemy.text(f"UPDATE global_inventory SET gold = {starting_gold + gold} WHERE id = 1"))
-
-    return {"total_potions_bought": sum([red_quantity, green_quantity, blue_quantity]), "total_gold_paid": gold}
-
-
-def checkout_logic(customer_quantity: int, checkout_quantity: int, gold: int, potion_row):
-    """Handles if customer orders more potions than in stock"""
-    if customer_quantity > potion_row.quantity:
-        raise HTTPException(status_code=500, detail=f"Buying {customer_quantity} potions when {potion_row.quantity} in stock")
-    else:
-        checkout_quantity = customer_quantity
-    gold += potion_row.price * checkout_quantity
-    return checkout_quantity, gold
+    return {"total_potions_bought": sum_quantity, 
+            "total_gold_paid": checkout_gold}
