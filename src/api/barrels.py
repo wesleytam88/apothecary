@@ -23,7 +23,10 @@ class Barrel(BaseModel):
 def post_deliver_barrels(barrels_delivered: list[Barrel]):
     """ """
     with db.engine.begin() as connection:
-        global_inv = connection.execute(sqlalchemy.text("SELECT * FROM global_inventory")).first()
+        global_inv = connection.execute(sqlalchemy.text("""
+                                                        SELECT * 
+                                                        FROM global_inventory
+                                                        """)).first()
 
     red_ml = global_inv.red_ml
     green_ml = global_inv.green_ml
@@ -46,14 +49,20 @@ def post_deliver_barrels(barrels_delivered: list[Barrel]):
         gold -= barrel.price * barrel.quantity
         
     with db.engine.begin() as connection:
-        connection.execute(sqlalchemy.text(f"UPDATE global_inventory \
-                                             SET \
-                                                gold = {gold}, \
-                                                red_ml = {red_ml}, \
-                                                green_ml = {green_ml}, \
-                                                blue_ml = {blue_ml}, \
-                                                dark_ml = {dark_ml} \
-                                             WHERE id = 1"))
+        connection.execute(sqlalchemy.text("""UPDATE global_inventory
+                                              SET 
+                                                  gold = :gold,
+                                                  red_ml = :red_ml,
+                                                  green_ml = :green_ml,
+                                                  blue_ml = :blue_ml,
+                                                  dark_ml = :dark_ml
+                                              WHERE id = 1
+                                              """),
+                                              [{"gold": gold,
+                                                "red_ml": red_ml,
+                                                "green_ml": green_ml,
+                                                "blue_ml": blue_ml,
+                                                "dark_ml": dark_ml}])
     
     print(barrels_delivered)
 
@@ -66,10 +75,10 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     print(wholesale_catalog)
 
     with db.engine.begin() as connection:
-        gold = connection.execute(sqlalchemy.text("SELECT * FROM global_inventory")).first().gold
-        red_pot_row = connection.execute(sqlalchemy.text("SELECT * FROM potion_inventory where id = 1")).first()
-        green_pot_row = connection.execute(sqlalchemy.text("SELECT * FROM potion_inventory where id = 2")).first()
-        blue_pot_row = connection.execute(sqlalchemy.text("SELECT * FROM potion_inventory where id = 3")).first()
+        gold = connection.execute(sqlalchemy.text("""
+                                                  SELECT *
+                                                  FROM global_inventory
+                                                  """)).first().gold
 
     # Barrel order logic
     order_list = []
