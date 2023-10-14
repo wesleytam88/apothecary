@@ -117,7 +117,7 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
                                                       """),
                                                       [{"c_quantity": item.quantity,
                                                         "p_id": item.potion_id}])
-            checkout_gold += price.first()[0]
+            checkout_gold += price.first()[0] * item.quantity
             sum_quantity += item.quantity
 
         # Update gold
