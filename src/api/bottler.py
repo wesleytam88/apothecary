@@ -89,16 +89,26 @@ def get_bottle_plan():
     keep_bottling = True
     bottler_list = []
     potions_to_brew = {}
+
+    print("Before:", bottler_list)
+
     while keep_bottling:
+        failed_brews = 0
         for potion in potion_inv:
             # Check if potion cannot be brewed with available ml
             if potion.potion_type[0] > red_ml or \
                potion.potion_type[1] > green_ml or \
                potion.potion_type[2] > blue_ml or \
                potion.potion_type[3] > dark_ml:
-                keep_bottling = False
-                break
+                failed_brews += 1
+                if failed_brews >= len(potion_inv):
+                    # Can't brew ANY more potions, stop while loop
+                    keep_bottling = False
+                    break
+                # Can't brew this specific potion, try another one
+                continue
 
+            print(potion)
             # Potion can be brewed
             red_ml -= potion.potion_type[0]
             green_ml -= potion.potion_type[1]
@@ -110,8 +120,12 @@ def get_bottle_plan():
             potion_type, quantity = potions_to_brew[potion.sku]
             potions_to_brew[potion.sku] = [potion_type, quantity + 1]
 
+    print("Potions-to_brew:", potions_to_brew)
+    print("Bottler_list:", bottler_list)
+
     for potion_type, quantity in potions_to_brew.values():
         bottler_list.append({"potion_type": potion_type,
-                            "quantity": quantity})
+                             "quantity": quantity})
 
+    print("After:", bottler_list)
     return bottler_list
