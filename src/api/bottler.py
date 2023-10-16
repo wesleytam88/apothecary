@@ -45,6 +45,8 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory]):
                                                [{"quantity": potion.quantity, 
                                                  "type": potion.potion_type}])
 
+            print(f"Update potion quantity: {potion.potion_type}, quantity added: {potion.quantity}")
+
         connection.execute(sqlalchemy.text("""UPDATE global_inventory
                                               SET 
                                                   red_ml = :red_ml,
