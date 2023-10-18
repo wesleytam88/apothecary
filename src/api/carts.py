@@ -97,6 +97,15 @@ class CartCheckout(BaseModel):
 def checkout(cart_id: int, cart_checkout: CartCheckout):
     """ """
     with db.engine.begin() as connection:
+        # Update payment
+        connection.execute(sqlalchemy.text("""
+                                           UPDATE carts
+                                           SET payment = :payment
+                                           WHERE id = :cart_id
+                                           """),
+                                           [{"payment": cart_checkout.payment,
+                                             "cart_id": cart_id}])
+
         cart_items = connection.execute(sqlalchemy.text("""
                                                         SELECT *
                                                         FROM cart_items
