@@ -50,14 +50,15 @@ def get_cart(cart_id: int):
 
         items = {}
         for row in items_table:
-            potion = connection.execute(sqlalchemy.text("""
-                                                        SELECT *
-                                                        FROM potion_inventory
-                                                        WHERE id = :potion_id
-                                                        """),
-                                                        [{"potion_id": row.potion_id}])
-            potion = potion.first()
-            items[potion.sku] = row.quantity
+            p_sku = connection.execute(sqlalchemy.text("""
+                                                       SELECT sku
+                                                       FROM potion_inventory
+                                                       WHERE id = :p_id
+                                                       """),
+                                                       [{"p_id": row.potion_id}])
+            p_sku = p_sku.first()[0]
+
+            items[p_sku] = row.quantity
 
         return [cart.customer, items]
 
@@ -77,6 +78,18 @@ def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
                                                     """),
                                                     [{"p_sku": item_sku}])
         potion = potion.first()
+
+        potion_count = connection.execute(sqlalchemy.text("""
+                                                          SELECT SUM(change)
+                                                          FROM ledger_potions
+                                                          WHERE potion_id = :p_id
+                                                          """),
+                                                          [{"p_id": potion.id}])
+        potion_count = potion_count.first()[0]
+
+        # Check if enough potions in stock
+        if cart_item.quantity > potion_count:
+            raise HTTPException(status_code=500, detail=f"Trying to buy {cart_item.quantity} {potion.sku} when {potion_count} available")
 
         # Update cart_items table
         connection.execute(sqlalchemy.text("""
@@ -114,28 +127,52 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
                                                         [{"c_id": cart_id}])
         cart_items = cart_items.all()
 
-        # Update quantities in potion table
         checkout_gold = 0
-        sum_quantity = 0
+        checkout_quantity = 0
         for item in cart_items:
+            # Update transactions ledger
+            transaction_id = connection.execute(sqlalchemy.text("""
+                                                                INSERT
+                                                                INTO ledger_transactions
+                                                                (description)
+                                                                VALUES (:desc)
+                                                                RETURNING id
+                                                                """),
+                                                                [{"desc": f"{item.quantity} potion(s) of id {item.potion_id} sold"}])
+            transaction_id = transaction_id.first()[0]
+
+            # Update potions ledger
+            connection.execute(sqlalchemy.text("""
+                                               INSERT
+                                               INTO ledger_potions
+                                               (transaction_id, potion_id, change)
+                                               VALUES
+                                               (:transaction_id, :p_id, :change)
+                                               """),
+                                               [{"transaction_id": transaction_id,
+                                                 "p_id": item.potion_id,
+                                                 "change": -item.quantity}])
+
+            # Update gold ledger
             price = connection.execute(sqlalchemy.text("""
-                                                      UPDATE potion_inventory
-                                                      SET quantity = quantity - :c_quantity
+                                                      SELECT price
+                                                      FROM potion_inventory
                                                       WHERE id = :p_id
-                                                      RETURNING price
                                                       """),
-                                                      [{"c_quantity": item.quantity,
-                                                        "p_id": item.potion_id}])
-            checkout_gold += price.first()[0] * item.quantity
-            sum_quantity += item.quantity
+                                                      [{"p_id": item.potion_id}])
+            price = price.first()[0]
+            connection.execute(sqlalchemy.text("""
+                                               INSERT
+                                               INTO ledger_gold
+                                               (transaction_id, change)
+                                               VALUES
+                                               (:transaction_id, :change)
+                                               """),
+                                               [{"transaction_id": transaction_id,
+                                                 "change": price * item.quantity}])
+            
+            checkout_gold += price * item.quantity
+            checkout_quantity += item.quantity
 
-        # Update gold
-        connection.execute(sqlalchemy.text("""
-                                           UPDATE global_inventory
-                                           SET gold = gold + :checkout_gold
-                                           WHERE id = 1
-                                           """),
-                                           [{"checkout_gold": checkout_gold}])
-
-    return {"total_potions_bought": sum_quantity, 
+    return {"total_potions_bought": checkout_quantity, 
             "total_gold_paid": checkout_gold}
