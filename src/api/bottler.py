@@ -92,38 +92,23 @@ def get_bottle_plan():
                                                         SELECT *
                                                         FROM potion_inventory
                                                         """)).all()
-        red_ml = connection.execute(sqlalchemy.text("""
-                                                     SELECT 
-                                                     COALESCE(SUM(change), 0)
-                                                     FROM ledger_ml
-                                                     WHERE type = :type
-                                                     """),
-                                                     [{"type": [1, 0, 0, 0]}])
-        red_ml = red_ml.first()[0]
-        green_ml = connection.execute(sqlalchemy.text("""
-                                                     SELECT
-                                                     COALESCE(SUM(change), 0)
-                                                     FROM ledger_ml
-                                                     WHERE type = :type
-                                                     """),
-                                                     [{"type": [0, 1, 0, 0]}])
-        green_ml = green_ml.first()[0]
-        blue_ml = connection.execute(sqlalchemy.text("""
-                                                     SELECT
-                                                     COALESCE(SUM(change), 0)
-                                                     FROM ledger_ml
-                                                     WHERE type = :type
-                                                     """),
-                                                     [{"type": [0, 0, 1, 0]}])
-        blue_ml = blue_ml.first()[0]
-        dark_ml = connection.execute(sqlalchemy.text("""
-                                                     SELECT
-                                                     COALESCE(SUM(change), 0)
-                                                     FROM ledger_ml
-                                                     WHERE type = :type
-                                                     """),
-                                                     [{"type": [0, 0, 0, 1]}])
-        dark_ml = dark_ml.first()[0]
+        ml_table = connection.execute(sqlalchemy.text("""
+                                                      SELECT
+                                                      type, COALESCE(SUM(change), 0)
+                                                      FROM ledger_ml
+                                                      GROUP BY type""")).all()
+
+    red_ml = green_ml = blue_ml = dark_ml = 0
+    for (type, amount) in ml_table:
+        match type:
+            case [1, 0, 0, 0]:
+                red_ml += amount
+            case [0, 1, 0, 0]:
+                green_ml += amount
+            case [0, 0, 1, 0]:
+                blue_ml += amount
+            case [0, 0, 0, 1]:
+                dark_ml += amount
 
     keep_bottling = True
     bottler_list = []
