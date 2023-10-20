@@ -28,6 +28,13 @@ def get_inventory():
                                                           FROM ledger_potions
                                                           """)).first()[0]
 
+    if gold == None:
+        gold = 0
+    if ml_count == None:
+        ml_count = 0
+    if potion_count == None:
+        potion_count = 0
+
     return {"number_of_potions": potion_count, 
             "ml_in_barrels": ml_count, 
             "gold": gold}
