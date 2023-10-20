@@ -89,7 +89,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     if gold >= small_blue_barrel.price and small_blue_barrel.quantity > 0:
         order_list = order_barrel(order_list, small_blue_barrel, 1)
         gold -= small_blue_barrel.price
-    if gold >= large_dark_barrel.price and large_dark_barrel.quantity > 0:
+    if large_dark_barrel != None and gold >= large_dark_barrel.price and large_dark_barrel.quantity > 0:
         order_list = order_barrel(order_list, large_dark_barrel, 1)
         gold -= large_dark_barrel.price
 
@@ -100,7 +100,8 @@ def get_barrel(wholesale_catalog: list[Barrel], sku: str) -> Barrel:
     for barrel in wholesale_catalog:
         if barrel.sku == sku:
             return barrel
-    raise NameError(f"{sku} not found in catalog")
+    print(f"{sku} not found in catalog")
+    return None
 
 def order_barrel(l: list[Barrel], b: Barrel, quantity: int) -> list[Barrel]:
     """Appends barrel b to order_list l, returns new order_list"""
