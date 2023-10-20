@@ -93,28 +93,32 @@ def get_bottle_plan():
                                                         FROM potion_inventory
                                                         """)).all()
         red_ml = connection.execute(sqlalchemy.text("""
-                                                     SELECT SUM(change)
+                                                     SELECT 
+                                                     COALESCE(SUM(change), 0)
                                                      FROM ledger_ml
                                                      WHERE type = :type
                                                      """),
                                                      [{"type": [1, 0, 0, 0]}])
         red_ml = red_ml.first()[0]
         green_ml = connection.execute(sqlalchemy.text("""
-                                                     SELECT SUM(change)
+                                                     SELECT
+                                                     COALESCE(SUM(change), 0)
                                                      FROM ledger_ml
                                                      WHERE type = :type
                                                      """),
                                                      [{"type": [0, 1, 0, 0]}])
         green_ml = green_ml.first()[0]
         blue_ml = connection.execute(sqlalchemy.text("""
-                                                     SELECT SUM(change)
+                                                     SELECT
+                                                     COALESCE(SUM(change), 0)
                                                      FROM ledger_ml
                                                      WHERE type = :type
                                                      """),
                                                      [{"type": [0, 0, 1, 0]}])
         blue_ml = blue_ml.first()[0]
         dark_ml = connection.execute(sqlalchemy.text("""
-                                                     SELECT SUM(change)
+                                                     SELECT
+                                                     COALESCE(SUM(change), 0)
                                                      FROM ledger_ml
                                                      WHERE type = :type
                                                      """),

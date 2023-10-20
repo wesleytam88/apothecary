@@ -68,7 +68,8 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
 
     with db.engine.begin() as connection:
         gold = connection.execute(sqlalchemy.text("""
-                                                  SELECT SUM(change)
+                                                  SELECT
+                                                  COALESCE(SUM(change), 0)
                                                   FROM ledger_gold
                                                   """)).first()[0]
 

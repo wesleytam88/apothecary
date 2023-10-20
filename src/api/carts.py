@@ -80,7 +80,8 @@ def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
         potion = potion.first()
 
         potion_count = connection.execute(sqlalchemy.text("""
-                                                          SELECT SUM(change)
+                                                          SELECT 
+                                                          COALESCE(SUM(change), 0)
                                                           FROM ledger_potions
                                                           WHERE potion_id = :p_id
                                                           """),

@@ -15,7 +15,8 @@ def get_catalog():
 
     with db.engine.begin() as connection:
         potion_counts = connection.execute(sqlalchemy.text("""
-                                                           SELECT potion_id, SUM(change)
+                                                           SELECT 
+                                                           potion_id, COALESCE(SUM(change), 0)
                                                            FROM ledger_potions
                                                            GROUP BY potion_id
                                                            """)).all()
