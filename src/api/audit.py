@@ -16,16 +16,16 @@ def get_inventory():
     """ """
     with db.engine.begin() as connection:
         gold = connection.execute(sqlalchemy.text("""
-                                                  SELECT *
-                                                  FROM global_inventory
-                                                  """)).first().gold
+                                                  SELECT SUM(change)
+                                                  FROM ledger_gold
+                                                  """)).first()[0]
         ml_count = connection.execute(sqlalchemy.text("""
-                                                      SELECT SUM(red_ml + green_ml + blue_ml + dark_ml)
-                                                      FROM global_inventory
+                                                      SELECT SUM(change)
+                                                      FROM ledger_ml
                                                       """)).first()[0]
         potion_count = connection.execute(sqlalchemy.text("""
-                                                          SELECT SUM(quantity)
-                                                          FROM potion_inventory
+                                                          SELECT SUM(change)
+                                                          FROM ledger_potions
                                                           """)).first()[0]
 
     return {"number_of_potions": potion_count, 
