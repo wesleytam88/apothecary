@@ -21,44 +21,58 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory]):
     print("Potions delivered:", potions_delivered)
 
     with db.engine.begin() as connection:
-        global_inv = connection.execute(sqlalchemy.text("""
-                                                        SELECT *
-                                                        FROM global_inventory
-                                                        """)).first()
-
-        red_ml = global_inv.red_ml
-        green_ml = global_inv.green_ml
-        blue_ml = global_inv.blue_ml
-        dark_ml = global_inv.dark_ml
-
         for potion in potions_delivered:
-            red_ml -= potion.potion_type[0] * potion.quantity
-            green_ml -= potion.potion_type[1] * potion.quantity
-            blue_ml -= potion.potion_type[2] * potion.quantity
-            dark_ml -= potion.potion_type[3] * potion.quantity
+            # Update transaction ledger
+            transaction_id = connection.execute(sqlalchemy.text("""
+                                                                INSERT
+                                                                INTO ledger_transactions
+                                                                (description)
+                                                                VALUES (:desc)
+                                                                RETURNING id
+                                                                """),
+                                                                [{"desc": f"{potion.quantity} potion(s) of type {potion.potion_type} were delivered"}])
+            transaction_id = transaction_id.first()[0]
 
+            potion_id = connection.execute(sqlalchemy.text("""
+                                                           SELECT *
+                                                           FROM potion_inventory
+                                                           WHERE potion_type = :p_type
+                                                           """),
+                                                           [{"p_type": potion.potion_type}])
+            potion_id = potion_id.first()[0]
+
+            # Update potion ledger
             connection.execute(sqlalchemy.text("""
-                                               UPDATE potion_inventory
-                                               SET quantity = quantity + :quantity
-                                               WHERE potion_type = :type
+                                               INSERT INTO ledger_potions
+                                               (transaction_id, potion_id, change)
+                                               VALUEs
+                                               (:transaction_id, :p_id, :change)
                                                """),
-                                               [{"quantity": potion.quantity, 
-                                                 "type": potion.potion_type}])
+                                               [{"transaction_id": transaction_id,
+                                                 "p_id": potion_id,
+                                                 "change": potion.quantity}])
+            
+            # Update ml ledger
+            red_ml = potion.potion_type[0] * potion.quantity
+            green_ml = potion.potion_type[1] * potion.quantity
+            blue_ml = potion.potion_type[2] * potion.quantity
+            dark_ml = potion.potion_type[3] * potion.quantity
+            indx_to_ml = {0: (red_ml, [1, 0, 0, 0]), 
+                          1: (green_ml, [0, 1, 0, 0]),
+                          2: (blue_ml, [0, 0, 1, 0]),
+                          3: (dark_ml, [0, 0, 0, 1])}
 
-            print(f"Update potion quantity: {potion.potion_type}, quantity added: {potion.quantity}")
-
-        connection.execute(sqlalchemy.text("""UPDATE global_inventory
-                                              SET 
-                                                  red_ml = :red_ml,
-                                                  green_ml = :green_ml,
-                                                  blue_ml = :blue_ml,
-                                                  dark_ml = :dark_ml
-                                              WHERE id = 1
-                                              """),
-                                              [{"red_ml": red_ml,
-                                                "green_ml": green_ml,
-                                                "blue_ml": blue_ml,
-                                                "dark_ml": dark_ml}])
+            for i in range(len(potion.potion_type)):
+                if potion.potion_type[i] != 0:
+                    connection.execute(sqlalchemy.text("""
+                                                       INSERT INTO ledger_ml
+                                                       (transaction_id, type, change)
+                                                       VALUES
+                                                       (:transaction_id, :type, :change)
+                                                       """),
+                                                       [{"transaction_id": transaction_id,
+                                                         "type": indx_to_ml[i][1],
+                                                         "change": -indx_to_ml[i][0]}])
 
     return "OK"
 
@@ -74,25 +88,42 @@ def get_bottle_plan():
     # Expressed in integers from 1 to 100 that must sum up to 100.
 
     with db.engine.begin() as connection:
-        global_inv = connection.execute(sqlalchemy.text("""
-                                                        SELECT *
-                                                        FROM global_inventory
-                                                        """)).first()
         potion_inv = connection.execute(sqlalchemy.text("""
                                                         SELECT *
                                                         FROM potion_inventory
                                                         """)).all()
-
-    red_ml = global_inv.red_ml
-    green_ml = global_inv.green_ml
-    blue_ml = global_inv.blue_ml
-    dark_ml = global_inv.dark_ml
+        red_ml = connection.execute(sqlalchemy.text("""
+                                                     SELECT SUM(change)
+                                                     FROM ledger_ml
+                                                     WHERE type = :type
+                                                     """),
+                                                     [{"type": [1, 0, 0, 0]}])
+        red_ml = red_ml.first()[0]
+        green_ml = connection.execute(sqlalchemy.text("""
+                                                     SELECT SUM(change)
+                                                     FROM ledger_ml
+                                                     WHERE type = :type
+                                                     """),
+                                                     [{"type": [0, 1, 0, 0]}])
+        green_ml = green_ml.first()[0]
+        blue_ml = connection.execute(sqlalchemy.text("""
+                                                     SELECT SUM(change)
+                                                     FROM ledger_ml
+                                                     WHERE type = :type
+                                                     """),
+                                                     [{"type": [0, 0, 1, 0]}])
+        blue_ml = blue_ml.first()[0]
+        dark_ml = connection.execute(sqlalchemy.text("""
+                                                     SELECT SUM(change)
+                                                     FROM ledger_ml
+                                                     WHERE type = :type
+                                                     """),
+                                                     [{"type": [0, 0, 0, 1]}])
+        dark_ml = dark_ml.first()[0]
 
     keep_bottling = True
     bottler_list = []
     potions_to_brew = {}
-
-    print("Before:", bottler_list)
 
     while keep_bottling:
         failed_brews = 0
@@ -110,7 +141,6 @@ def get_bottle_plan():
                 # Can't brew this specific potion, try another one
                 continue
 
-            print(potion)
             # Potion can be brewed
             red_ml -= potion.potion_type[0]
             green_ml -= potion.potion_type[1]
@@ -122,12 +152,8 @@ def get_bottle_plan():
             potion_type, quantity = potions_to_brew[potion.sku]
             potions_to_brew[potion.sku] = [potion_type, quantity + 1]
 
-    print("Potions-to_brew:", potions_to_brew)
-    print("Bottler_list:", bottler_list)
-
     for potion_type, quantity in potions_to_brew.values():
         bottler_list.append({"potion_type": potion_type,
                              "quantity": quantity})
 
-    print("After:", bottler_list)
     return bottler_list
