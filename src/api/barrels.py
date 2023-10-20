@@ -22,49 +22,41 @@ class Barrel(BaseModel):
 @router.post("/deliver")
 def post_deliver_barrels(barrels_delivered: list[Barrel]):
     """ """
-    with db.engine.begin() as connection:
-        global_inv = connection.execute(sqlalchemy.text("""
-                                                        SELECT * 
-                                                        FROM global_inventory
-                                                        """)).first()
-
-    red_ml = global_inv.red_ml
-    green_ml = global_inv.green_ml
-    blue_ml = global_inv.blue_ml
-    dark_ml = global_inv.dark_ml
-    gold = global_inv.gold
-
-    for barrel in barrels_delivered:
-        match barrel.potion_type:
-            case [1, 0, 0, 0]:
-                red_ml += barrel.quantity * barrel.ml_per_barrel
-            case [0, 1, 0, 0]:
-                green_ml += barrel.quantity * barrel.ml_per_barrel
-            case [0, 0, 1, 0]:
-                blue_ml += barrel.quantity * barrel.ml_per_barrel
-            case [0, 0, 0, 1]:
-                dark_ml += barrel.quantity * barrel.ml_per_barrel
-            case _:
-                raise ValueError(f"potion type of {barrel.potion_type} not found")
-        gold -= barrel.price * barrel.quantity
-        
-    with db.engine.begin() as connection:
-        connection.execute(sqlalchemy.text("""UPDATE global_inventory
-                                              SET 
-                                                  gold = :gold,
-                                                  red_ml = :red_ml,
-                                                  green_ml = :green_ml,
-                                                  blue_ml = :blue_ml,
-                                                  dark_ml = :dark_ml
-                                              WHERE id = 1
-                                              """),
-                                              [{"gold": gold,
-                                                "red_ml": red_ml,
-                                                "green_ml": green_ml,
-                                                "blue_ml": blue_ml,
-                                                "dark_ml": dark_ml}])
+    print("Barrels delivered:", barrels_delivered)
     
-    print(barrels_delivered)
+    with db.engine.begin() as connection:
+        for barrel in barrels_delivered:
+            # Update transaction ledger
+            transaction_id = connection.execute(sqlalchemy.text("""
+                                                                INSERT
+                                                                INTO ledger_transactions
+                                                                (description)
+                                                                VALUES (:desc)
+                                                                RETURNING id
+                                                                """),
+                                                                [{"desc": f"{barrel.quantity} {barrel.sku} bought for {barrel.price} gold"}])
+            transaction_id = transaction_id.first()[0]
+
+            # Update ml ledger
+            connection.execute(sqlalchemy.text("""
+                                               INSERT INTO ledger_ml
+                                               (transaction_id, type, change)
+                                               VALUES
+                                               (:transaction_id, :p_type, :change)
+                                               """),
+                                               [{"transaction_id": transaction_id,
+                                                 "p_type": barrel.potion_type,
+                                                 "change": barrel.quantity * barrel.ml_per_barrel}])
+            
+            # Update gold ledger
+            connection.execute(sqlalchemy.text("""
+                                               INSERT INTO ledger_gold
+                                               (transaction_id, change)
+                                               VALUES
+                                               (:transaction_id, :change)
+                                               """),
+                                               [{"transaction_id": transaction_id,
+                                                  "change": -barrel.price}])
 
     return "OK"
 
@@ -72,47 +64,33 @@ def post_deliver_barrels(barrels_delivered: list[Barrel]):
 @router.post("/plan")
 def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     """ """
-    print(wholesale_catalog)
+    print("Wholesale catalog:", wholesale_catalog)
 
     with db.engine.begin() as connection:
         gold = connection.execute(sqlalchemy.text("""
-                                                  SELECT *
-                                                  FROM global_inventory
-                                                  """)).first().gold
+                                                  SELECT SUM(change)
+                                                  FROM ledger_gold
+                                                  """)).first()[0]
 
     # Barrel order logic
     order_list = []
     small_red_barrel = get_barrel(wholesale_catalog, "SMALL_RED_BARREL")
     small_green_barrel = get_barrel(wholesale_catalog, "SMALL_GREEN_BARREL")
     small_blue_barrel = get_barrel(wholesale_catalog, "SMALL_BLUE_BARREL")
+    large_dark_barrel = get_barrel(wholesale_catalog, "LARGE_DARK_BARREL")
 
     if gold >= small_red_barrel.price and small_red_barrel.quantity > 0:
-        order_list.append({
-            "sku": small_red_barrel.sku,
-            "ml_per_barrel": small_red_barrel.ml_per_barrel,
-            "potion_type": small_red_barrel.potion_type,
-            "price": small_red_barrel.price,
-            "quantity": 1
-        })
+        order_list = order_barrel(order_list, small_red_barrel, 1)
         gold -= small_red_barrel.price
     if gold >= small_green_barrel.price and small_green_barrel.quantity > 0:
-        order_list.append({
-            "sku": small_green_barrel.sku,
-            "ml_per_barrel": small_green_barrel.ml_per_barrel,
-            "potion_type": small_green_barrel.potion_type,
-            "price": small_green_barrel.price,
-            "quantity": 1
-        })
+        order_list = order_barrel(order_list, small_green_barrel, 1)
         gold -= small_green_barrel.price
     if gold >= small_blue_barrel.price and small_blue_barrel.quantity > 0:
-        order_list.append({
-            "sku": small_blue_barrel.sku,
-            "ml_per_barrel": small_blue_barrel.ml_per_barrel,
-            "potion_type": small_blue_barrel.potion_type,
-            "price": small_blue_barrel.price,
-            "quantity": 1
-        })
+        order_list = order_barrel(order_list, small_blue_barrel, 1)
         gold -= small_blue_barrel.price
+    if gold >= large_dark_barrel.price and large_dark_barrel.quantity > 0:
+        order_list = order_barrel(order_list, large_dark_barrel, 1)
+        gold -= large_dark_barrel.price
 
     return order_list
 
@@ -122,3 +100,14 @@ def get_barrel(wholesale_catalog: list[Barrel], sku: str) -> Barrel:
         if barrel.sku == sku:
             return barrel
     raise NameError(f"{sku} not found in catalog")
+
+def order_barrel(l: list[Barrel], b: Barrel, quantity: int) -> list[Barrel]:
+    """Appends barrel b to order_list l, returns new order_list"""
+    l.append({
+        "sku": b.sku,
+        "ml_per_barrel": b.ml_per_barrel,
+        "potion_type": b.potion_type,
+        "price": b.price,
+        "quantity": quantity
+    })
+    return l
