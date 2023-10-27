@@ -50,6 +50,24 @@ def search_orders(
     time is 5 total line items.
     """
 
+    with db.engine.begin() as connection:
+        query = """
+                SELECT ledger_transactions.created_at, carts.customer, potion_inventory.sku, gold.change
+                FROM ledger_transactions
+                JOIN carts ON carts.transaction_id = ledger_transactions.id
+                JOIN ledger_potions ON ledger_potions.transaction_id = ledger_transactions.id
+                JOIN potion_inventory ON potion_inventory.sku = :sku
+                JOIN ledger_gold ON ledger_gold.transaction_id = ledger_transaction.id
+                ORDER BY ledger_transactions.created_time
+                """
+        if customer_name != "":
+            query.append(f"WHERE carts.customer = {customer_name}")
+        if potion_sku != "":
+            query.append(f"WHERE potion_inventory.sku = {potion_sku}")
+        response = connection.execute(
+            sqlalchemy.text()).all()
+        print(response)
+
     return {
         "previous": "",
         "next": "",
