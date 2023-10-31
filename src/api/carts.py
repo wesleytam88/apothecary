@@ -106,19 +106,24 @@ def search_orders(
             .limit(LIMIT)
             .order_by(order_by)
         )
-        query2 = (
-            sqlalchemy.select(
-                sqlalchemy.func.count(ledger_transactions.c.id)
-            )
-            .select_from(join4)
-        )
-
         if customer_name != "":
             query = query.where(carts.c.customer.ilike(f"%{customer_name}%"))
         if potion_sku != "":
             query = query.where(potion_inv.c.sku.ilike(f"%{potion_sku}%"))
 
         response = connection.execute(query).all()
+
+        query2 = (
+            sqlalchemy.select(
+                sqlalchemy.func.count(ledger_transactions.c.id)
+            )
+            .select_from(join4)
+        )
+        if customer_name != "":
+            query2 = query2.where(carts.c.customer.ilike(f"%{customer_name}%"))
+        if potion_sku != "":
+            query2 = query2.where(potion_inv.c.sku.ilike(f"%{potion_sku}%"))
+
         num_rows = connection.execute(query2).first()[0]
 
     results = []
