@@ -53,37 +53,91 @@ def search_orders(
     Your results must be paginated, the max results you can return at any
     time is 5 total line items.
     """
+    LIMIT = 5
+    if search_page == "":
+        offset = 0
+    else:
+        offset = int(search_page) * LIMIT        # assuming search page is 0 indexed
 
     with db.engine.begin() as connection:
-        query = """
-                SELECT ledger_transactions.created_at, carts.customer, potion_inventory.sku, gold.change
-                FROM ledger_transactions
-                JOIN carts ON carts.transaction_id = ledger_transactions.id
-                JOIN ledger_potions ON ledger_potions.transaction_id = ledger_transactions.id
-                JOIN potion_inventory ON potion_inventory.sku = :sku
-                JOIN ledger_gold ON ledger_gold.transaction_id = ledger_transaction.id
-                ORDER BY ledger_transactions.created_time
-                """
+        metadata = sqlalchemy.MetaData()
+        ledger_transactions = sqlalchemy.Table("ledger_transactions", metadata, autoload_with=db.engine)
+        ledger_gold = sqlalchemy.Table("ledger_gold", metadata, autoload_with=db.engine)
+        ledger_potions = sqlalchemy.Table("ledger_potions", metadata, autoload_with=db.engine)
+        carts = sqlalchemy.Table("carts", metadata, autoload_with=db.engine)
+        potion_inv = sqlalchemy.Table("potion_inventory", metadata, autoload_with=db.engine)
+
+        match sort_col:
+            case search_sort_options.line_item_total:
+                order_by = ledger_gold.c.change
+            case search_sort_options.item_sku:
+                order_by = potion_inv.c.sku
+            case search_sort_options.customer_name:
+                order_by = carts.c.customer
+            case search_sort_options.timestamp:
+                order_by = ledger_transactions.c.created_at
+            case _:
+                assert False
+
+        match sort_order:
+            case search_sort_order.desc:
+                order_by = order_by.desc()
+            case search_sort_order.asc:
+                order_by = order_by.asc()
+            case _:
+                assert False
+
+        join1 = sqlalchemy.join(ledger_transactions, carts, carts.c.transaction_id == ledger_transactions.c.id)
+        join2 = sqlalchemy.join(join1, ledger_potions, ledger_potions.c.transaction_id == ledger_transactions.c.id)
+        join3 = sqlalchemy.join(join2, potion_inv, potion_inv.c.id == ledger_potions.c.potion_id)
+        join4 = sqlalchemy.join(join3, ledger_gold, ledger_gold.c.transaction_id == ledger_transactions.c.id)
+
+        query = (
+            sqlalchemy.select(
+                ledger_transactions.c.id,
+                ledger_transactions.c.created_at,
+                carts.c.customer,
+                potion_inv.c.sku,
+                ledger_potions.c.change,
+                ledger_gold.c.change,
+            )
+            .select_from(join4)
+            .offset(offset)
+            .limit(LIMIT)
+            .order_by(order_by)
+        )
+        query2 = (
+            sqlalchemy.select(
+                sqlalchemy.func.count(ledger_transactions.c.id)
+            )
+            .select_from(join4)
+        )
+
         if customer_name != "":
-            query.append(f"WHERE carts.customer = {customer_name}")
+            query = query.where(carts.c.customer.ilike(f"%{customer_name}%"))
         if potion_sku != "":
-            query.append(f"WHERE potion_inventory.sku = {potion_sku}")
-        response = connection.execute(
-            sqlalchemy.text()).all()
-        print(response)
+            query = query.where(potion_inv.c.sku.ilike(f"%{potion_sku}%"))
+
+        response = connection.execute(query).all()
+        num_rows = connection.execute(query2).first()[0]
+
+    results = []
+    for transaction in response:
+        results.append({
+            "line_item_id": transaction.id,
+            "item_sku": f"{-transaction.change} {transaction.sku}",
+            "customer_name": transaction.customer,
+            "line_item_total": transaction[5],
+            "timestamp": transaction.created_at,
+        })
+
+    prev = "1" if offset > LIMIT else ""
+    next = "1" if num_rows > (offset + len(response)) else ""
 
     return {
-        "previous": "",
-        "next": "",
-        "results": [
-            {
-                "line_item_id": 1,
-                "item_sku": "1 oblivion potion",
-                "customer_name": "Scaramouche",
-                "line_item_total": 50,
-                "timestamp": "2021-01-01T00:00:00Z",
-            }
-        ],
+        "previous": prev,
+        "next": next,
+        "results": results
     }
 
 class NewCart(BaseModel):
